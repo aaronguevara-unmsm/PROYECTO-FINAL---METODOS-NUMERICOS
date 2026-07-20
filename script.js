@@ -122,19 +122,23 @@ function calcularYGraficar() {
     xaxis: { gridcolor: '#334155' },
     yaxis: { gridcolor: '#334155' }
   };
-
+// Configuración para idioma español y responsividad
+  const configPlotly = {
+    locale: 'es',
+    responsive: true
+  };
   Plotly.newPlot('plot-regresion', [
     { x: P_crudo, y: T_crudo, mode: 'markers', name: 'Datos Exp.', marker: { color: '#60a5fa', size: 8 } },
     { x: P_crudo, y: T_fit, mode: 'lines', name: 'Regresión Cúbica', line: { color: '#ef4444', width: 2 } }
-  ], { ...themeLayout, title: 'Ajuste Polinómico Cúbico (Potencia vs Temperatura)' });
+  ], { ...themeLayout, title: 'Ajuste Polinómico Cúbico (Potencia vs Temperatura)' }, configPlotly);
 
   Plotly.newPlot('plot-residuos', [
     { x: P_crudo.map((_, i) => i + 1), y: res, mode: 'lines+markers', line: { color: '#38bdf8' } }
-  ], { ...themeLayout, title: 'Residuos del Modelo (T_exp - T_fit)', xaxis: { title: 'Muestra' }, yaxis: { title: 'Error (°C)' } });
+  ], { ...themeLayout, title: 'Residuos del Modelo (T_exp - T_fit)', xaxis: { title: 'Muestra' }, yaxis: { title: 'Error (°C)' } }, configPlotly);
 
   Plotly.newPlot('plot-inercia', [
     { x: tiempo, y: dTdt, mode: 'lines', line: { color: '#f97316', width: 2 } }
-  ], { ...themeLayout, title: 'Inercia Térmica (dT/dt)', xaxis: { title: 'Tiempo (s)' }, yaxis: { title: 'dT/dt (°C/s)' } });
+  ], { ...themeLayout, title: 'Inercia Térmica (dT/dt)', xaxis: { title: 'Tiempo (s)' }, yaxis: { title: 'dT/dt (°C/s)' } }, configPlotly);
 }
 
 function showTab(tabId) {
