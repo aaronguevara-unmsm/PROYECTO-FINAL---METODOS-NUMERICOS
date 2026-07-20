@@ -16,56 +16,81 @@ function handleFile(e) {
   const reader = new FileReader();
 
   reader.onload = function(evt) {
-    const data = new Uint8Array(evt.target.result);
-    // Leer el libro de trabajo de Excel
-    const workbook = XLSX.read(data, { type: 'array' });
-    
-    // Obtener la primera hoja de cálculo
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    
-    // Convertir la hoja a matriz de filas (header: 1 guarda cada fila como array)
-    const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // Convertir la hoja a matriz de filas
+      const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-    let newP = [];
-    let newT = [];
-
-    // Índices de columnas en Excel para HWiNFO:
-    // Columna NV -> Índice 377 (378.ª columna)
-    // Columna OC -> Índice 392 (393.ª columna)
-    const COL_TEMP_NV = 377;
-    const COL_POWER_OC = 392;
-
-    // Recorrer las filas extrayendo los datos de NV y OC
-    for (let i = 0; i < jsonSheet.length; i++) {
-      const row = jsonSheet[i];
-      if (!row || row.length === 0) continue;
-
-      let valTemp = row[COL_TEMP_NV];
-      let valPower = row[COL_POWER_OC];
-
-      // Convertir a número y validar
-      valTemp = parseFloat(valTemp);
-      valPower = parseFloat(valPower);
-
-      if (!isNaN(valTemp) && !isNaN(valPower)) {
-        newT.push(valTemp);  // Temperatura en °C (Columna NV)
-        newP.push(valPower); // Potencia en Watts (Columna OC)
+      if (!jsonSheet || jsonSheet.length < 2) {
+        alert("El archivo parece estar vacío o no tiene suficiente información.");
+        return;
       }
-    }
 
-    if (newP.length > 3) {
-      P_crudo = newP;
-      T_crudo = newT;
-      calcularYGraficar();
-    } else {
-      alert("No se encontraron suficientes datos numéricos en las columnas NV (Temperatura) y OC (Potencia) del archivo HWiNFO.");
+      let colTempIdx = -1;
+      let colPowerIdx = -1;
+      let startRow = 0;
+
+      // 1. Buscar dinámicamente "GPU Temperature" y "GPU Power"
+      for (let r = 0; r < Math.min(5, jsonSheet.length); r++) {
+        const row = jsonSheet[r];
+        if (!row) continue;
+
+        for (let c = 0; c < row.length; c++) {
+          const cell = String(row[c] || '').toLowerCase();
+          
+          if ((cell.includes('gpu temperature') || cell.includes('temperatura de gpu') || cell.includes('gpu temp')) && !cell.includes('hot spot')) {
+            if (colTempIdx === -1) colTempIdx = c;
+          }
+          if ((cell.includes('gpu power') || cell.includes('potencia de gpu') || cell.includes('gpu ppt') || cell.includes('gpu core power')) && !cell.includes('rail')) {
+            if (colPowerIdx === -1) colPowerIdx = c;
+          }
+        }
+
+        if (colTempIdx !== -1 && colPowerIdx !== -1) {
+          startRow = r + 1;
+          break;
+        }
+      }
+
+      // Si no los encuentra por texto, usar por defecto NV (377) y OC (392)
+      if (colTempIdx === -1) colTempIdx = 377;
+      if (colPowerIdx === -1) colPowerIdx = 392;
+
+      let newP = [];
+      let newT = [];
+
+      // 2. Extraer datos numéricos
+      for (let i = startRow; i < jsonSheet.length; i++) {
+        const row = jsonSheet[i];
+        if (!row) continue;
+
+        let valTemp = parseFloat(row[colTempIdx]);
+        let valPower = parseFloat(row[colPowerIdx]);
+
+        if (!isNaN(valTemp) && !isNaN(valPower)) {
+          newT.push(valTemp);
+          newP.push(valPower);
+        }
+      }
+
+      if (newP.length > 3) {
+        P_crudo = newP;
+        T_crudo = newT;
+        calcularYGraficar();
+      } else {
+        alert("No se encontraron datos válidos en las columnas de Temperatura y Potencia.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error al procesar el archivo Excel.");
     }
   };
 
-  reader.readAsArrayBuffer(file);
-}
-  };
   reader.readAsArrayBuffer(file);
 }
 
@@ -78,9 +103,16 @@ function cubicRegression(x, y) {
   for (let i = 0; i < n; i++) {
     let xi = x[i], yi = y[i];
     let xi2 = xi * xi, xi3 = xi2 * xi;
-    sX += xi; sX2 += xi2; sX3 += xi3;
-    sX4 += xi3 * xi; sX5 += xi3 * xi2; sX6 += xi3 * xi3;
-    sY += yi; sXY += xi * yi; sX2Y += xi2 * yi; sX3Y += xi3 * yi;
+    sX += xi;
+    sX2 += xi2;
+    sX3 += xi3;
+    sX4 += xi3 * xi;
+    sX5 += xi3 * xi2;
+    sX6 += xi3 * xi3;
+    sY += yi;
+    sXY += xi * yi;
+    sX2Y += xi2 * yi;
+    sX3Y += xi3 * yi;
   }
 
   let M = [
@@ -113,6 +145,7 @@ function cubicRegression(x, y) {
       M[k][4] -= M[k][i] * coef[i];
     }
   }
+
   return { a0: coef[0], a1: coef[1], a2: coef[2], a3: coef[3] };
 }
 
@@ -120,7 +153,7 @@ function calcularYGraficar() {
   const coefs = cubicRegression(P_crudo, T_crudo);
   const T_fit = P_crudo.map(p => coefs.a3 * Math.pow(p, 3) + coefs.a2 * Math.pow(p, 2) + coefs.a1 * p + coefs.a0);
   const res = T_crudo.map((t, i) => t - T_fit[i]);
-
+  
   const rmse = Math.sqrt(res.reduce((acc, r) => acc + r * r, 0) / res.length);
   const mae = res.reduce((acc, r) => acc + Math.abs(r), 0) / res.length;
   const errMax = Math.max(...res.map(r => Math.abs(r)));
@@ -144,18 +177,16 @@ function calcularYGraficar() {
   document.getElementById('val-dtdt').textContent = maxdTdt.toFixed(4);
   document.getElementById('val-sensib').textContent = coefs.a1.toFixed(4);
 
-const themeLayout = {
+  const themeLayout = {
     paper_bgcolor: '#121215',
     plot_bgcolor: '#121215',
     font: { color: '#f4f4f5', family: 'Poppins' },
     xaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46' },
     yaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46' }
   };
-// Configuración para idioma español y responsividad
-  const configPlotly = {
-    locale: 'es',
-    responsive: true
-  };
+
+  const configPlotly = { locale: 'es', responsive: true };
+
   Plotly.newPlot('plot-regresion', [
     { x: P_crudo, y: T_crudo, mode: 'markers', name: 'Datos Exp.', marker: { color: '#60a5fa', size: 8 } },
     { x: P_crudo, y: T_fit, mode: 'lines', name: 'Regresión Cúbica', line: { color: '#ef4444', width: 2 } }
