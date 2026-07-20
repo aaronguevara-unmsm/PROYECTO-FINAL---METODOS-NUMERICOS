@@ -1,7 +1,7 @@
 // Datos por defecto (si no se sube un archivo)
 let P_crudo = [10, 25, 40, 60, 80, 100, 120, 140, 150];
 let T_crudo = [35, 42, 48, 55, 63, 70, 75, 78, 80];
-const dt = 2;
+const dt = 2; // Intervalo de muestreo constante en segundos
 
 // Función para procesar la subida del Excel (HWiNFO)
 function handleFile(e) {
@@ -23,7 +23,6 @@ function handleFile(e) {
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       
-      // Convertir la hoja a matriz de filas
       const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
       if (!jsonSheet || jsonSheet.length < 2) {
@@ -31,28 +30,21 @@ function handleFile(e) {
         return;
       }
 
-      // POSICIONES EXACTAS PARA HWiNFO:
-      // Columna NV (386 en Excel) -> Índice 385 en JavaScript (Temperatura)
-      // Columna OC (393 en Excel) -> Índice 392 en JavaScript (Potencia)
+      // Columna NV (386 en Excel) -> Índice 385
+      // Columna OC (393 en Excel) -> Índice 392
       const COL_TEMP_NV = 385;
       const COL_POWER_OC = 392;
 
       let newP = [];
       let newT = [];
 
-      // Función para limpiar texto, comas decimales y extraer solo el número
       const parseCleanNumber = (val) => {
         if (val === null || val === undefined) return NaN;
         if (typeof val === 'number') return val;
-        
-        const cleanStr = String(val)
-          .replace(/,/g, '.')
-          .replace(/[^\d.-]/g, '');
-          
+        const cleanStr = String(val).replace(/,/g, '.').replace(/[^\d.-]/g, '');
         return parseFloat(cleanStr);
       };
 
-      // Recorrer las filas del Excel
       for (let i = 0; i < jsonSheet.length; i++) {
         const row = jsonSheet[i];
         if (!row || row.length === 0) continue;
@@ -60,7 +52,6 @@ function handleFile(e) {
         let valTemp = parseCleanNumber(row[COL_TEMP_NV]);
         let valPower = parseCleanNumber(row[COL_POWER_OC]);
 
-        // Guardar solo si ambos son números válidos
         if (!isNaN(valTemp) && !isNaN(valPower)) {
           newT.push(valTemp);
           newP.push(valPower);
@@ -70,9 +61,9 @@ function handleFile(e) {
       if (newP.length > 3) {
         P_crudo = newP;
         T_crudo = newT;
-        calcularYGraficar(); // Actualizar las 4 gráficas en vivo
+        calcularYGraficar();
       } else {
-        alert(`No se pudieron extraer datos numéricos de las columnas NV (385) y OC (392). Filas procesadas: ${newP.length}`);
+        alert(`No se pudieron extraer datos numéricos de las columnas NV (385) y OC (392).`);
       }
     } catch (err) {
       console.error(err);
@@ -83,7 +74,7 @@ function handleFile(e) {
   reader.readAsArrayBuffer(file);
 }
 
-// Algoritmo de Regresión Cúbica
+// Algoritmo de Regresión Cúbica (Mínimos Cuadrados / polyfit grado 3)
 function cubicRegression(x, y) {
   let n = x.length;
   let sX = 0, sX2 = 0, sX3 = 0, sX4 = 0, sX5 = 0, sX6 = 0;
@@ -139,34 +130,73 @@ function cubicRegression(x, y) {
 }
 
 function calcularYGraficar() {
-  const coefs = cubicRegression(P_crudo, T_crudo);
-  const T_fit = P_crudo.map(p => coefs.a3 * Math.pow(p, 3) + coefs.a2 * Math.pow(p, 2) + coefs.a1 * p + coefs.a0);
-  const res = T_crudo.map((t, i) => t - T_fit[i]);
+  // ==========================================
+  // BLOQUE 1 Y 2: Ordenamiento respecto a Potencia (igual a MATLAB)
+  // ==========================================
+  let indices = Array.from(P_crudo.keys());
+  indices.sort((a, b) => P_crudo[a] - P_crudo[b]);
 
+  const P = indices.map(i => P_crudo[i]);
+  const T = indices.map(i => T_crudo[i]);
+
+  // ==========================================
+  // BLOQUE 3: Regresión Polinómica Cúbica (polyfit)
+  // ==========================================
+  const coefs = cubicRegression(P, T);
+  const Tfit = P.map(p => coefs.a3 * Math.pow(p, 3) + coefs.a2 * Math.pow(p, 2) + coefs.a1 * p + coefs.a0);
+
+  // ==========================================
+  // BLOQUE 4: Residuos y Métricas
+  // ==========================================
+  const res = T.map((t, i) => t - Tfit[i]);
   const rmse = Math.sqrt(res.reduce((acc, r) => acc + r * r, 0) / res.length);
   const mae = res.reduce((acc, r) => acc + Math.abs(r), 0) / res.length;
   const errMax = Math.max(...res.map(r => Math.abs(r)));
 
+  // ==========================================
+  // BLOQUE 5: Sensibilidad Térmica (dT/dP) mediante Diferencias Finitas
+  // ==========================================
+  let dTdP = [];
+  let P_valid = [];
+
+  for (let i = 0; i < P.length - 1; i++) {
+    let dP = P[i + 1] - P[i];
+    let dT = T[i + 1] - T[i];
+
+    // Filtro anti-singularidad de MATLAB: abs(dP) > 0.01
+    if (Math.abs(dP) > 0.01) {
+      dTdP.push(dT / dP);
+      P_valid.push(P[i]);
+    }
+  }
+
+  const meanSensib = dTdP.length > 0 ? (dTdP.reduce((a, b) => a + b, 0) / dTdP.length) : coefs.a1;
+
+  // ==========================================
+  // BLOQUE 6: Dinámica Temporal (dT/dt) sobre T_crudo
+  // ==========================================
   const dTdt = [];
-  const tiempo = [];
+  const tiempo_simulado = [];
+
   for (let i = 0; i < T_crudo.length - 1; i++) {
     dTdt.push((T_crudo[i + 1] - T_crudo[i]) / dt);
-    tiempo.push(i * dt);
+    tiempo_simulado.push(i * dt);
   }
   const maxdTdt = Math.max(...dTdt);
 
-  // Muestra de coeficientes a 2 decimales (o exponencial a 2 decimales para a3)
+  // ==========================================
+  // ACTUALIZAR INTERFAZ Y MÉTRICAS (2 Decimales)
+  // ==========================================
   document.getElementById('coef-a3').textContent = coefs.a3.toExponential(2);
   document.getElementById('coef-a2').textContent = coefs.a2.toFixed(2);
   document.getElementById('coef-a1').textContent = coefs.a1.toFixed(2);
   document.getElementById('coef-a0').textContent = coefs.a0.toFixed(2);
 
-  // Métricas recortadas a 2 decimales
   document.getElementById('val-rmse').textContent = rmse.toFixed(2);
   document.getElementById('val-mae').textContent = mae.toFixed(2);
   document.getElementById('val-errmax').textContent = errMax.toFixed(2);
   document.getElementById('val-dtdt').textContent = maxdTdt.toFixed(2);
-  document.getElementById('val-sensib').textContent = coefs.a1.toFixed(2);
+  document.getElementById('val-sensib').textContent = meanSensib.toFixed(2);
 
   const themeLayout = {
     paper_bgcolor: '#121215',
@@ -178,29 +208,26 @@ function calcularYGraficar() {
 
   const configPlotly = { locale: 'es', responsive: true };
 
-  // 1. Gráfica de Regresión Cúbica
+  // 1. Gráfica de Regresión P vs T
   Plotly.newPlot('plot-regresion', [
-    { x: P_crudo, y: T_crudo, mode: 'markers', name: 'Datos Exp.', marker: { color: '#60a5fa', size: 8 } },
-    { x: P_crudo, y: T_fit, mode: 'lines', name: 'Regresión Cúbica', line: { color: '#ef4444', width: 2 } }
-  ], { ...themeLayout, title: 'Ajuste Polinómico Cúbico (Potencia vs Temperatura)' }, configPlotly);
+    { x: P, y: T, mode: 'markers', name: 'Datos Exp.', marker: { color: '#60a5fa', size: 6, opacity: 0.7 } },
+    { x: P, y: Tfit, mode: 'lines', name: 'Modelo Matemático', line: { color: '#ef4444', width: 2 } }
+  ], { ...themeLayout, title: 'Ajuste Polinómico (Grado 3)', xaxis: { title: 'Potencia (W)' }, yaxis: { title: 'Temperatura (°C)' } }, configPlotly);
 
-  // 2. Gráfica de Residuos
+  // 2. Gráfica de Residuos del Modelo
   Plotly.newPlot('plot-residuos', [
-    { x: P_crudo.map((_, i) => i + 1), y: res, mode: 'lines+markers', line: { color: '#38bdf8' } }
-  ], { ...themeLayout, title: 'Residuos del Modelo (T_exp - T_fit)', xaxis: { title: 'Muestra' }, yaxis: { title: 'Error (°C)' } }, configPlotly);
+    { x: res.map((_, i) => i + 1), y: res, mode: 'lines', line: { color: '#0072BD', width: 1.5 } }
+  ], { ...themeLayout, title: 'Residuos del Modelo (T_exp - T_fit)', xaxis: { title: 'Muestra Ordenada' }, yaxis: { title: 'Error Absoluto (°C)' } }, configPlotly);
 
-  // 3. Gráfica de Inercia Térmica
-  Plotly.newPlot('plot-inercia', [
-    { x: tiempo, y: dTdt, mode: 'lines', line: { color: '#f97316', width: 2 } }
-  ], { ...themeLayout, title: 'Inercia Térmica (dT/dt)', xaxis: { title: 'Tiempo (s)' }, yaxis: { title: 'dT/dt (°C/s)' } }, configPlotly);
-
-  // 4. Gráfica de Sensibilidad Térmica (dT/dP) - Ordenada para curva suave
-  const P_ordenado = [...P_crudo].sort((a, b) => a - b);
-  const dTdP = P_ordenado.map(p => 3 * coefs.a3 * Math.pow(p, 2) + 2 * coefs.a2 * p + coefs.a1);
-
+  // 3. Gráfica de Sensibilidad Térmica (dT/dP - Métrica MATLAB)
   Plotly.newPlot('plot-sensibilidad', [
-    { x: P_ordenado, y: dTdP, mode: 'lines', line: { color: '#eab308', width: 2 } }
-  ], { ...themeLayout, title: 'Sensibilidad Térmica (dT/dP vs Potencia)', xaxis: { title: 'Potencia (W)' }, yaxis: { title: 'dT/dP (°C/W)' } }, configPlotly);
+    { x: P_valid, y: dTdP, mode: 'lines', line: { color: '#0072BD', width: 1.5 } }
+  ], { ...themeLayout, title: 'Sensibilidad Térmica vs Potencia', xaxis: { title: 'Potencia (W)' }, yaxis: { title: 'Sensibilidad (dT/dP) [°C/W]' } }, configPlotly);
+
+  // 4. Gráfica de Inercia Térmica (dT/dt)
+  Plotly.newPlot('plot-inercia', [
+    { x: tiempo_simulado, y: dTdt, mode: 'lines', line: { color: '#D95319', width: 1.5 } }
+  ], { ...themeLayout, title: 'Dinámica Temporal: Inercia Térmica', xaxis: { title: 'Tiempo (s)' }, yaxis: { title: 'Velocidad (dT/dt) [°C/s]' } }, configPlotly);
 }
 
 function showTab(tabId) {
