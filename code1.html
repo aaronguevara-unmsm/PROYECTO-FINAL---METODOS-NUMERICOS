@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Análisis Térmico GPU NVIDIA RTX 5060</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Plotly.js para gráficos interactivos -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Análisis Térmico de GPU NVIDIA RTX 5060</h1>
+    <p>Métodos Numéricos: Regresión Polinómica Cúbica y Dinámica Térmica</p>
+  </header>
+
+  <div class="container">
+    <!-- Panel Lateral de Métricas / Controles -->
+    <aside class="sidebar">
+      <h2>Métricas del Modelo</h2>
+      <div class="card">
+        <h3>Coeficientes del Polinomio</h3>
+        <p><strong>a₃:</strong> <span id="coef-a3">-</span></p>
+        <p><strong>a₂:</strong> <span id="coef-a2">-</span></p>
+        <p><strong>a₁:</strong> <span id="coef-a1">-</span></p>
+        <p><strong>a₀:</strong> <span id="coef-a0">-</span></p>
+      </div>
+
+      <div class="card">
+        <h3>Análisis de Residuos</h3>
+        <p><strong>RMSE:</strong> <span id="val-rmse">-</span> °C</p>
+        <p><strong>MAE:</strong> <span id="val-mae">-</span> °C</p>
+        <p><strong>Error Máx:</strong> <span id="val-errmax">-</span> °C</p>
+      </div>
+
+      <div class="card">
+        <h3>Dinámica Temporal</h3>
+        <p><strong>Velocidad Máx (dT/dt):</strong> <span id="val-dtdt">-</span> °C/s</p>
+        <p><strong>Sensibilidad Promedio:</strong> <span id="val-sensib">-</span> °C/W</p>
+      </div>
+    </aside>
+
+    <!-- Área Principal de Gráficas -->
+    <main class="main-content">
+      <div class="tab-buttons">
+        <button class="tab-btn active" onclick="showTab('tab-regresion')">Regresión Cúbica</button>
+        <button class="tab-btn" onclick="showTab('tab-residuos')">Residuos</button>
+        <button class="tab-btn" onclick="showTab('tab-sensibilidad')">Sensibilidad (dT/dP)</button>
+        <button class="tab-btn" onclick="showTab('tab-inercia')">Inercia Térmica (dT/dt)</button>
+      </div>
+
+      <div id="tab-regresion" class="tab-content active">
+        <div id="plot-regresion" class="plot-container"></div>
+      </div>
+      <div id="tab-residuos" class="tab-content">
+        <div id="plot-residuos" class="plot-container"></div>
+      </div>
+      <div id="tab-sensibilidad" class="tab-content">
+        <div id="plot-sensibilidad" class="plot-container"></div>
+      </div>
+      <div id="tab-inercia" class="tab-content">
+        <div id="plot-inercia" class="plot-container"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
