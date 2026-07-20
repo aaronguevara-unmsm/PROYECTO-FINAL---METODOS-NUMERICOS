@@ -199,6 +199,12 @@ function calcularYGraficar() {
   Plotly.newPlot('plot-inercia', [
     { x: tiempo, y: dTdt, mode: 'lines', line: { color: '#f97316', width: 2 } }
   ], { ...themeLayout, title: 'Inercia Térmica (dT/dt)', xaxis: { title: 'Tiempo (s)' }, yaxis: { title: 'dT/dt (°C/s)' } }, configPlotly);
+  // 4. Cálculo y Gráfica de Sensibilidad Térmica (dT/dP)
+  const dTdP = P_crudo.map(p => 3 * coefs.a3 * Math.pow(p, 2) + 2 * coefs.a2 * p + coefs.a1);
+
+  Plotly.newPlot('plot-sensibilidad', [
+    { x: P_crudo, y: dTdP, mode: 'lines', line: { color: '#eab308', width: 2 } }
+  ], { ...themeLayout, title: 'Sensibilidad Térmica (dT/dP vs Potencia)', xaxis: { title: 'Potencia (W)' }, yaxis: { title: 'dT/dP (°C/W)' } }, configPlotly);
 }
 
 function showTab(tabId) {
