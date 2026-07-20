@@ -3,29 +3,54 @@ let P_crudo = [10, 25, 40, 60, 80, 100, 120, 140, 150];
 let T_crudo = [35, 42, 48, 55, 63, 70, 75, 78, 80];
 const dt = 2;
 
-// Función para procesar la subida del Excel
+// Función para procesar la subida del Excel (HWiNFO)
 function handleFile(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  document.getElementById('file-name').textContent = `📄 ${file.name}`;
+  const fileNameElement = document.getElementById('file-name');
+  if (fileNameElement) {
+    fileNameElement.textContent = `📄 ${file.name}`;
+  }
 
   const reader = new FileReader();
+
   reader.onload = function(evt) {
     const data = new Uint8Array(evt.target.result);
+    // Leer el libro de trabajo de Excel
     const workbook = XLSX.read(data, { type: 'array' });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+    
+    // Obtener la primera hoja de cálculo
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    // Convertir la hoja a matriz de filas (header: 1 guarda cada fila como array)
+    const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
     let newP = [];
     let newT = [];
 
-    // Omitir cabecera si existe y extraer valores
-    for (let i = 0; i < jsonData.length; i++) {
-      let row = jsonData[i];
-      if (row.length >= 2 && !isNaN(row[0]) && !isNaN(row[1])) {
-        newP.push(Number(row[0]));
-        newT.push(Number(row[1]));
+    // Índices de columnas en Excel para HWiNFO:
+    // Columna NV -> Índice 377 (378.ª columna)
+    // Columna OC -> Índice 392 (393.ª columna)
+    const COL_TEMP_NV = 377;
+    const COL_POWER_OC = 392;
+
+    // Recorrer las filas extrayendo los datos de NV y OC
+    for (let i = 0; i < jsonSheet.length; i++) {
+      const row = jsonSheet[i];
+      if (!row || row.length === 0) continue;
+
+      let valTemp = row[COL_TEMP_NV];
+      let valPower = row[COL_POWER_OC];
+
+      // Convertir a número y validar
+      valTemp = parseFloat(valTemp);
+      valPower = parseFloat(valPower);
+
+      if (!isNaN(valTemp) && !isNaN(valPower)) {
+        newT.push(valTemp);  // Temperatura en °C (Columna NV)
+        newP.push(valPower); // Potencia en Watts (Columna OC)
       }
     }
 
@@ -34,8 +59,12 @@ function handleFile(e) {
       T_crudo = newT;
       calcularYGraficar();
     } else {
-      alert("El archivo Excel debe contener al menos 4 filas numéricas con [Potencia, Temperatura].");
+      alert("No se encontraron suficientes datos numéricos en las columnas NV (Temperatura) y OC (Potencia) del archivo HWiNFO.");
     }
+  };
+
+  reader.readAsArrayBuffer(file);
+}
   };
   reader.readAsArrayBuffer(file);
 }
