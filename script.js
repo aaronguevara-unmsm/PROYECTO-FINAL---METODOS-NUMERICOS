@@ -31,11 +31,14 @@ function handleFile(e) {
         return;
       }
 
+      // Posiciones predeterminadas en HWiNFO:
+      // Columna NV -> Índice 377
+      // Columna OC -> Índice 392
       let colTempIdx = -1;
       let colPowerIdx = -1;
       let startRow = 0;
 
-      // 1. Buscar las columnas exactas de HWiNFO en las primeras 5 filas
+      // 1. Intentar buscar los nombres de encabezado en las primeras 5 filas
       for (let r = 0; r < Math.min(5, jsonSheet.length); r++) {
         const row = jsonSheet[r];
         if (!row) continue;
@@ -43,12 +46,9 @@ function handleFile(e) {
         for (let c = 0; c < row.length; c++) {
           const cell = String(row[c] || '').toLowerCase().trim();
           
-          // Buscar Temperatura de la GPU (evitando Hot Spot o Memorias)
           if ((cell.includes('gpu temperature') || cell.includes('gpu temp')) && !cell.includes('hot spot') && !cell.includes('memory')) {
             if (colTempIdx === -1) colTempIdx = c;
           }
-          
-          // Buscar Potencia de la GPU (Power / PPT)
           if ((cell.includes('gpu power') || cell.includes('gpu ppt') || cell.includes('gpu core power')) && !cell.includes('rail')) {
             if (colPowerIdx === -1) colPowerIdx = c;
           }
@@ -60,31 +60,34 @@ function handleFile(e) {
         }
       }
 
-      // Si no los encuentra por texto, usar por defecto las columnas NV (377) y OC (392)
+      // Si no los detecta por texto, cae directamente en NV (377) y OC (392)
       if (colTempIdx === -1) colTempIdx = 377;
       if (colPowerIdx === -1) colPowerIdx = 392;
 
       let newP = [];
       let newT = [];
 
-      // Limpia símbolos como "°C" o "W" antes de convertir a número
+      // Función limpiadora de unidades (elimina "°C", "W", comas decimales, etc.)
       const parseCleanNumber = (val) => {
         if (val === null || val === undefined) return NaN;
         if (typeof val === 'number') return val;
-        const cleanStr = String(val).replace(/,/g, '.').replace(/[^\d.-]/g, '');
+        
+        const cleanStr = String(val)
+          .replace(/,/g, '.')
+          .replace(/[^\d.-]/g, ''); // Quita unidades (°C, W) y texto sobrante
+          
         return parseFloat(cleanStr);
       };
 
-      // 2. Extraer datos numéricos limpios y lógicos
+      // 2. Extraer datos numéricos limpios
       for (let i = startRow; i < jsonSheet.length; i++) {
         const row = jsonSheet[i];
-        if (!row) continue;
+        if (!row || row.length === 0) continue;
 
         let valTemp = parseCleanNumber(row[colTempIdx]);
         let valPower = parseCleanNumber(row[colPowerIdx]);
 
-        // Filtrar valores coherentes para una GPU
-        if (!isNaN(valTemp) && !isNaN(valPower) && valTemp > 10 && valTemp < 120 && valPower > 0) {
+        if (!isNaN(valTemp) && !isNaN(valPower)) {
           newT.push(valTemp);
           newP.push(valPower);
         }
@@ -93,9 +96,9 @@ function handleFile(e) {
       if (newP.length > 3) {
         P_crudo = newP;
         T_crudo = newT;
-        calcularYGraficar();
+        calcularYGraficar(); // Actualiza gráficos y métricas
       } else {
-        alert(`No se pudieron extraer datos válidos. Columnas leídas -> Temp Col: ${colTempIdx}, Power Col: ${colPowerIdx}`);
+        alert(`No se pudieron extraer datos numéricos de las columnas leídas (Temp Col: ${colTempIdx}, Power Col: ${colPowerIdx}).`);
       }
     } catch (err) {
       console.error(err);
