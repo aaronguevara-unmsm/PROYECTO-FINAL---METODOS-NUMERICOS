@@ -27,66 +27,41 @@ function handleFile(e) {
       const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
       if (!jsonSheet || jsonSheet.length < 2) {
-        alert("El archivo parece estar vacío o no tiene suficiente información.");
+        alert("El archivo parece estar vacío o no contiene suficientes filas.");
         return;
       }
 
-      // Posiciones predeterminadas en HWiNFO:
-      // Columna NV -> Índice 377
-      // Columna OC -> Índice 392
-      let colTempIdx = -1;
-      let colPowerIdx = -1;
-      let startRow = 0;
-
-      // 1. Intentar buscar los nombres de encabezado en las primeras 5 filas
-      for (let r = 0; r < Math.min(5, jsonSheet.length); r++) {
-        const row = jsonSheet[r];
-        if (!row) continue;
-
-        for (let c = 0; c < row.length; c++) {
-          const cell = String(row[c] || '').toLowerCase().trim();
-          
-          if ((cell.includes('gpu temperature') || cell.includes('gpu temp')) && !cell.includes('hot spot') && !cell.includes('memory')) {
-            if (colTempIdx === -1) colTempIdx = c;
-          }
-          if ((cell.includes('gpu power') || cell.includes('gpu ppt') || cell.includes('gpu core power')) && !cell.includes('rail')) {
-            if (colPowerIdx === -1) colPowerIdx = c;
-          }
-        }
-
-        if (colTempIdx !== -1 && colPowerIdx !== -1) {
-          startRow = r + 1;
-          break;
-        }
-      }
-
-      // Si no los detecta por texto, cae directamente en NV (377) y OC (392)
-      if (colTempIdx === -1) colTempIdx = 377;
-      if (colPowerIdx === -1) colPowerIdx = 392;
+      // POSICIONES EXACTAS PARA HWiNFO:
+      // Columna NV (386 en Excel) -> Índice 385 en JavaScript (Temperatura)
+      // Columna OC (393 en Excel) -> Índice 392 en JavaScript (Potencia)
+      const COL_TEMP_NV = 385;
+      const COL_POWER_OC = 392;
 
       let newP = [];
       let newT = [];
 
-      // Función limpiadora de unidades (elimina "°C", "W", comas decimales, etc.)
+      // Función para limpiar texto, comas decimales y extraer solo el número
       const parseCleanNumber = (val) => {
         if (val === null || val === undefined) return NaN;
         if (typeof val === 'number') return val;
         
+        // Reemplaza comas por puntos y elimina todo excepto números, punto y signo menos
         const cleanStr = String(val)
           .replace(/,/g, '.')
-          .replace(/[^\d.-]/g, ''); // Quita unidades (°C, W) y texto sobrante
+          .replace(/[^\d.-]/g, '');
           
         return parseFloat(cleanStr);
       };
 
-      // 2. Extraer datos numéricos limpios
-      for (let i = startRow; i < jsonSheet.length; i++) {
+      // Recorrer las filas del Excel
+      for (let i = 0; i < jsonSheet.length; i++) {
         const row = jsonSheet[i];
         if (!row || row.length === 0) continue;
 
-        let valTemp = parseCleanNumber(row[colTempIdx]);
-        let valPower = parseCleanNumber(row[colPowerIdx]);
+        let valTemp = parseCleanNumber(row[COL_TEMP_NV]);
+        let valPower = parseCleanNumber(row[COL_POWER_OC]);
 
+        // Guardar solo si ambos son números válidos
         if (!isNaN(valTemp) && !isNaN(valPower)) {
           newT.push(valTemp);
           newP.push(valPower);
@@ -96,9 +71,9 @@ function handleFile(e) {
       if (newP.length > 3) {
         P_crudo = newP;
         T_crudo = newT;
-        calcularYGraficar(); // Actualiza gráficos y métricas
+        calcularYGraficar(); // Actualizar las 4 gráficas en vivo
       } else {
-        alert(`No se pudieron extraer datos numéricos de las columnas leídas (Temp Col: ${colTempIdx}, Power Col: ${colPowerIdx}).`);
+        alert(`No se pudieron extraer datos numéricos de las columnas NV (385) y OC (392). Filas procesadas: ${newP.length}`);
       }
     } catch (err) {
       console.error(err);
