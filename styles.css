@@ -2,7 +2,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 body {
@@ -121,4 +121,13 @@ header h1 {
 .plot-container {
   width: 100%;
   height: 500px;
+}
+header h1 {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.card h3, .tab-btn {
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
