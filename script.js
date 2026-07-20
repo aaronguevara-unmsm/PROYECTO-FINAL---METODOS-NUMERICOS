@@ -45,7 +45,6 @@ function handleFile(e) {
         if (val === null || val === undefined) return NaN;
         if (typeof val === 'number') return val;
         
-        // Reemplaza comas por puntos y elimina todo excepto números, punto y signo menos
         const cleanStr = String(val)
           .replace(/,/g, '.')
           .replace(/[^\d.-]/g, '');
@@ -156,23 +155,25 @@ function calcularYGraficar() {
   }
   const maxdTdt = Math.max(...dTdt);
 
-  document.getElementById('coef-a3').textContent = coefs.a3.toExponential(4);
-  document.getElementById('coef-a2').textContent = coefs.a2.toFixed(4);
-  document.getElementById('coef-a1').textContent = coefs.a1.toFixed(4);
-  document.getElementById('coef-a0').textContent = coefs.a0.toFixed(4);
+  // Muestra de coeficientes a 2 decimales (o exponencial a 2 decimales para a3)
+  document.getElementById('coef-a3').textContent = coefs.a3.toExponential(2);
+  document.getElementById('coef-a2').textContent = coefs.a2.toFixed(2);
+  document.getElementById('coef-a1').textContent = coefs.a1.toFixed(2);
+  document.getElementById('coef-a0').textContent = coefs.a0.toFixed(2);
 
-  document.getElementById('val-rmse').textContent = rmse.toFixed(4);
-  document.getElementById('val-mae').textContent = mae.toFixed(4);
-  document.getElementById('val-errmax').textContent = errMax.toFixed(4);
-  document.getElementById('val-dtdt').textContent = maxdTdt.toFixed(4);
-  document.getElementById('val-sensib').textContent = coefs.a1.toFixed(4);
+  // Métricas recortadas a 2 decimales
+  document.getElementById('val-rmse').textContent = rmse.toFixed(2);
+  document.getElementById('val-mae').textContent = mae.toFixed(2);
+  document.getElementById('val-errmax').textContent = errMax.toFixed(2);
+  document.getElementById('val-dtdt').textContent = maxdTdt.toFixed(2);
+  document.getElementById('val-sensib').textContent = coefs.a1.toFixed(2);
 
   const themeLayout = {
     paper_bgcolor: '#121215',
     plot_bgcolor: '#121215',
     font: { color: '#f4f4f5', family: 'Poppins' },
-    xaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46' },
-    yaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46' }
+    xaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46', tickformat: '.2f' },
+    yaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46', tickformat: '.2f' }
   };
 
   const configPlotly = { locale: 'es', responsive: true };
@@ -193,10 +194,12 @@ function calcularYGraficar() {
     { x: tiempo, y: dTdt, mode: 'lines', line: { color: '#f97316', width: 2 } }
   ], { ...themeLayout, title: 'Inercia Térmica (dT/dt)', xaxis: { title: 'Tiempo (s)' }, yaxis: { title: 'dT/dt (°C/s)' } }, configPlotly);
 
-  // 4. Gráfica de Sensibilidad Térmica (dT/dP)
-  const dTdP = P_crudo.map(p => 3 * coefs.a3 * Math.pow(p, 2) + 2 * coefs.a2 * p + coefs.a1);
+  // 4. Gráfica de Sensibilidad Térmica (dT/dP) - Ordenada para curva suave
+  const P_ordenado = [...P_crudo].sort((a, b) => a - b);
+  const dTdP = P_ordenado.map(p => 3 * coefs.a3 * Math.pow(p, 2) + 2 * coefs.a2 * p + coefs.a1);
+
   Plotly.newPlot('plot-sensibilidad', [
-    { x: P_crudo, y: dTdP, mode: 'lines', line: { color: '#eab308', width: 2 } }
+    { x: P_ordenado, y: dTdP, mode: 'lines', line: { color: '#eab308', width: 2 } }
   ], { ...themeLayout, title: 'Sensibilidad Térmica (dT/dP vs Potencia)', xaxis: { title: 'Potencia (W)' }, yaxis: { title: 'dT/dP (°C/W)' } }, configPlotly);
 }
 
