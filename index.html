@@ -4,9 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Análisis Térmico GPU NVIDIA RTX 5060</title>
-  <link rel="stylesheet" href="styles.css">
-  <!-- Plotly.js para gráficos interactivos -->
+  <link rel="stylesheet" href="style.css">
+  <!-- Plotly.js para gráficos -->
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <!-- SheetJS para leer archivos Excel (.xlsx / .xls) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <header>
@@ -15,8 +17,15 @@
   </header>
 
   <div class="container">
-    <!-- Panel Lateral de Métricas / Controles -->
     <aside class="sidebar">
+      <!-- NUEVA SECCIÓN: CARGA DE ARCHIVO -->
+      <div class="card">
+        <h3>Cargar Datos (.xlsx / .xls)</h3>
+        <input type="file" id="excel-file" accept=".xlsx, .xls" style="display:none;" onchange="handleFile(event)">
+        <button class="btn-upload" onclick="document.getElementById('excel-file').click()">📂 Seleccionar Archivo</button>
+        <p id="file-name" style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem; text-align: center;">Cargando datos predeterminados...</p>
+      </div>
+
       <h2>Métricas del Modelo</h2>
       <div class="card">
         <h3>Coeficientes del Polinomio</h3>
@@ -40,7 +49,6 @@
       </div>
     </aside>
 
-    <!-- Área Principal de Gráficas -->
     <main class="main-content">
       <div class="tab-buttons">
         <button class="tab-btn active" onclick="showTab('tab-regresion')">Regresión Cúbica</button>
