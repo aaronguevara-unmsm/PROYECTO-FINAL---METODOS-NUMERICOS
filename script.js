@@ -115,12 +115,12 @@ function calcularYGraficar() {
   document.getElementById('val-dtdt').textContent = maxdTdt.toFixed(4);
   document.getElementById('val-sensib').textContent = coefs.a1.toFixed(4);
 
-  const themeLayout = {
-    paper_bgcolor: '#1e293b',
-    plot_bgcolor: '#1e293b',
-    font: { color: '#f8fafc' },
-    xaxis: { gridcolor: '#334155' },
-    yaxis: { gridcolor: '#334155' }
+const themeLayout = {
+    paper_bgcolor: '#121215',
+    plot_bgcolor: '#121215',
+    font: { color: '#f4f4f5', family: 'Poppins' },
+    xaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46' },
+    yaxis: { gridcolor: '#27272a', zerolinecolor: '#3f3f46' }
   };
 // Configuración para idioma español y responsividad
   const configPlotly = {
