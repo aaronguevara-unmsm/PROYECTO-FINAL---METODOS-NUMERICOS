@@ -35,18 +35,21 @@ function handleFile(e) {
       let colPowerIdx = -1;
       let startRow = 0;
 
-      // 1. Buscar dinámicamente "GPU Temperature" y "GPU Power"
+      // 1. Buscar las columnas exactas de HWiNFO en las primeras 5 filas
       for (let r = 0; r < Math.min(5, jsonSheet.length); r++) {
         const row = jsonSheet[r];
         if (!row) continue;
 
         for (let c = 0; c < row.length; c++) {
-          const cell = String(row[c] || '').toLowerCase();
+          const cell = String(row[c] || '').toLowerCase().trim();
           
-          if ((cell.includes('gpu temperature') || cell.includes('temperatura de gpu') || cell.includes('gpu temp')) && !cell.includes('hot spot')) {
+          // Buscar Temperatura de la GPU (evitando Hot Spot o Memorias)
+          if ((cell.includes('gpu temperature') || cell.includes('gpu temp')) && !cell.includes('hot spot') && !cell.includes('memory')) {
             if (colTempIdx === -1) colTempIdx = c;
           }
-          if ((cell.includes('gpu power') || cell.includes('potencia de gpu') || cell.includes('gpu ppt') || cell.includes('gpu core power')) && !cell.includes('rail')) {
+          
+          // Buscar Potencia de la GPU (Power / PPT)
+          if ((cell.includes('gpu power') || cell.includes('gpu ppt') || cell.includes('gpu core power')) && !cell.includes('rail')) {
             if (colPowerIdx === -1) colPowerIdx = c;
           }
         }
@@ -57,22 +60,31 @@ function handleFile(e) {
         }
       }
 
-      // Si no los encuentra por texto, usar por defecto NV (377) y OC (392)
+      // Si no los encuentra por texto, usar por defecto las columnas NV (377) y OC (392)
       if (colTempIdx === -1) colTempIdx = 377;
       if (colPowerIdx === -1) colPowerIdx = 392;
 
       let newP = [];
       let newT = [];
 
-      // 2. Extraer datos numéricos
+      // Limpia símbolos como "°C" o "W" antes de convertir a número
+      const parseCleanNumber = (val) => {
+        if (val === null || val === undefined) return NaN;
+        if (typeof val === 'number') return val;
+        const cleanStr = String(val).replace(/,/g, '.').replace(/[^\d.-]/g, '');
+        return parseFloat(cleanStr);
+      };
+
+      // 2. Extraer datos numéricos limpios y lógicos
       for (let i = startRow; i < jsonSheet.length; i++) {
         const row = jsonSheet[i];
         if (!row) continue;
 
-        let valTemp = parseFloat(row[colTempIdx]);
-        let valPower = parseFloat(row[colPowerIdx]);
+        let valTemp = parseCleanNumber(row[colTempIdx]);
+        let valPower = parseCleanNumber(row[colPowerIdx]);
 
-        if (!isNaN(valTemp) && !isNaN(valPower)) {
+        // Filtrar valores coherentes para una GPU
+        if (!isNaN(valTemp) && !isNaN(valPower) && valTemp > 10 && valTemp < 120 && valPower > 0) {
           newT.push(valTemp);
           newP.push(valPower);
         }
@@ -83,7 +95,7 @@ function handleFile(e) {
         T_crudo = newT;
         calcularYGraficar();
       } else {
-        alert("No se encontraron datos válidos en las columnas de Temperatura y Potencia.");
+        alert(`No se pudieron extraer datos válidos. Columnas leídas -> Temp Col: ${colTempIdx}, Power Col: ${colPowerIdx}`);
       }
     } catch (err) {
       console.error(err);
@@ -153,7 +165,7 @@ function calcularYGraficar() {
   const coefs = cubicRegression(P_crudo, T_crudo);
   const T_fit = P_crudo.map(p => coefs.a3 * Math.pow(p, 3) + coefs.a2 * Math.pow(p, 2) + coefs.a1 * p + coefs.a0);
   const res = T_crudo.map((t, i) => t - T_fit[i]);
-  
+
   const rmse = Math.sqrt(res.reduce((acc, r) => acc + r * r, 0) / res.length);
   const mae = res.reduce((acc, r) => acc + Math.abs(r), 0) / res.length;
   const errMax = Math.max(...res.map(r => Math.abs(r)));
@@ -187,21 +199,24 @@ function calcularYGraficar() {
 
   const configPlotly = { locale: 'es', responsive: true };
 
+  // 1. Gráfica de Regresión Cúbica
   Plotly.newPlot('plot-regresion', [
     { x: P_crudo, y: T_crudo, mode: 'markers', name: 'Datos Exp.', marker: { color: '#60a5fa', size: 8 } },
     { x: P_crudo, y: T_fit, mode: 'lines', name: 'Regresión Cúbica', line: { color: '#ef4444', width: 2 } }
   ], { ...themeLayout, title: 'Ajuste Polinómico Cúbico (Potencia vs Temperatura)' }, configPlotly);
 
+  // 2. Gráfica de Residuos
   Plotly.newPlot('plot-residuos', [
     { x: P_crudo.map((_, i) => i + 1), y: res, mode: 'lines+markers', line: { color: '#38bdf8' } }
   ], { ...themeLayout, title: 'Residuos del Modelo (T_exp - T_fit)', xaxis: { title: 'Muestra' }, yaxis: { title: 'Error (°C)' } }, configPlotly);
 
+  // 3. Gráfica de Inercia Térmica
   Plotly.newPlot('plot-inercia', [
     { x: tiempo, y: dTdt, mode: 'lines', line: { color: '#f97316', width: 2 } }
   ], { ...themeLayout, title: 'Inercia Térmica (dT/dt)', xaxis: { title: 'Tiempo (s)' }, yaxis: { title: 'dT/dt (°C/s)' } }, configPlotly);
-  // 4. Cálculo y Gráfica de Sensibilidad Térmica (dT/dP)
-  const dTdP = P_crudo.map(p => 3 * coefs.a3 * Math.pow(p, 2) + 2 * coefs.a2 * p + coefs.a1);
 
+  // 4. Gráfica de Sensibilidad Térmica (dT/dP)
+  const dTdP = P_crudo.map(p => 3 * coefs.a3 * Math.pow(p, 2) + 2 * coefs.a2 * p + coefs.a1);
   Plotly.newPlot('plot-sensibilidad', [
     { x: P_crudo, y: dTdP, mode: 'lines', line: { color: '#eab308', width: 2 } }
   ], { ...themeLayout, title: 'Sensibilidad Térmica (dT/dP vs Potencia)', xaxis: { title: 'Potencia (W)' }, yaxis: { title: 'dT/dP (°C/W)' } }, configPlotly);
@@ -210,8 +225,11 @@ function calcularYGraficar() {
 function showTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-  document.getElementById(tabId).classList.add('active');
-  event.target.classList.add('active');
+  
+  const selectedTab = document.getElementById(tabId);
+  if (selectedTab) selectedTab.classList.add('active');
+  if (event && event.target) event.target.classList.add('active');
+  
   window.dispatchEvent(new Event('resize'));
 }
 
